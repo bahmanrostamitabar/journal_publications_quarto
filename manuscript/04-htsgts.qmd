@@ -1,0 +1,55 @@
+# Hierarchical and grouped time series forecasting techniques {#sec-htc}
+
+There are many applications in healthcare, and in particular in EMS, where a collection of time series is available. These series are generally hierarchically organized based on multiple levels such as area/region, health board and/or are aggregated at different levels in groups based on nature of demand, priority of demand, or some other attributes. While series could be strictly hierarchical or only grouped bases on some attributes, in many situations a more complex structures arise when attributes of interest are both nested and crossed, having hierarchical and grouped structure. This is also the case for our application as discussed in @sec-data.
+
+## Independent (base forecast)
+
+A common practice in healthcare (and EMS) to predict hierarchical and grouped series relies on producing independent forecasts, also refereed to as base forecasts, typically by different teams as the need for such forecasts arise. We observe $n$ time series at time $t$, across the entire hierarchical and grouped structure, written as $y_t$. The base forecasts of $y_{T+h}$ given data $y_1,\dots,y_T$ are denoted by $\hat{y}_h$ for $h$ steps-ahead for all $n$ series ($n=1530$ in this study). Forecasts generated in this way are not coherent.
+
+## Reconciliation methods
+
+Traditionally, approaches to produce coherent forecasts for hierarchical and grouped time series involve using bottom-up and top-down methods by generating forecasts at a single level and then aggregating or disaggregating. Top-down methods require having a unique hierarchical structure to disaggregate forecasts generated at the top level by proportions. However, given that we have multiple grouped attributes combined with the hierarchical structure, there is no unique way to disaggregate top forecasts. Hence the top-down approach cannot be used in our application. The recommended approach is to use forecast reconciliation [@hyndman2011optimal]. In the following sections, we first discuss some notation, and then present bottom-up and forecast reconciliation approaches used in this study to generate coherent forecasts.
+
+### Notations
+
+Let $\bm{b}_t$ be a vector of $n_b$ _bottom-level_ time series at time $t$, and let $\bm{a}_t$ be a corresponding vector of $n_a = n-n_b$ aggregated time series, where
+$$
+  \bm{a}_t = \bm{A}\bm{b}_t,
+$$
+and $\bm{A}$ is the $n_a\times n_b$ "aggregation" matrix specifying how the bottom-level series $\bm{b}_t$ are to be aggregated to form $\bm{a}_t$. The aggregation matrix $\bm{A}$ is determined by the structure of the hierarchy. It maps the bottom-level time series to the corresponding higher-level time series. For example, if there are two bottom-level series, and one aggregated series (equal to the sum of the two bottom-level series), then $\bm{A} = \begin{bmatrix} 1 ~~ 1 \end{bmatrix}$.
+
+The full vector of time series is given by
+$$
+ \bm{y}_t = \begin{bmatrix}\bm{a}_t \\\bm{b}_t\end{bmatrix}.
+$$
+This leads to the $n\times n_b$ "summing" or "structural" matrix given by
+$$
+  \bm{S} = \begin{bmatrix}\bm{A} \\ \bm{I}_{n_b}\end{bmatrix}
+$$
+such that $\bm{y}_t = \bm{S}\bm{b}_t$.
+
+The term "bottom-level series" relates to the most disaggregated series within the hierarchical and grouped time series structure. For instance, in Table 2, each distinct combination of values in Control area (e.g. South \& East), Health board (e.g. CV), Priority (e.g. Green), and Nature of incident (e.g. Chest pain), corresponds to one individual time series. In the dataset at hand, there are 691 unique combinations, resulting in 691 bottom level time series. The "aggregate time series" describes how these bottom-level series are combined to create higher-level series. For instance, to obtain the incidents at the national level (i.e. all country level), the time series are aggregated across all Control areas, Health boards, Priorities, and Natures of incidents. Any desired aggregation level can be achieved based on the data structure, utilizing the bottom-level series available.
+
+### Bottom-up (BU) and linear reconciliation methods
+
+Bottom-Up is a simple approach to generate coherent forecasts. It involves first creating the base forecasts for the bottom-level series (i.e., the most disaggregated series). These forecasts are then aggregated to the upper levels which naturally results in coherent forecasts. The BU approach can capture the dynamics of the series at the bottom level, but these series may be noisy and difficult to forecast. The approach uses only the data at the most disaggregated level, and so does not utilize all the information available across the hierarchical and grouped structure.
+
+The bottom-up (BU) approach is constrained by its reliance solely on base forecasts from a single level of aggregation at the bottom level. While it does result in consistent forecasts, the BU approach lacks forecast reconciliation since no reconciliation is performed.
+
+Forecast reconciliation approaches bridge this gap by combining and reconciling all base forecasts to generate coherent forecasts. This technique utilizes all the base forecasts produced within a hierarchical structure to create consistent forecasts at every level of the hierarchy. As a result, it goes beyond relying solely on base forecasts from a single level of aggregation, and instead leverages all available information at each level to generate forecasts that minimize the total forecast variance of the set of coherent forecasts. Linear reconciliation involves projecting the base forecasts onto the coherent space. It is derived by minimizing the sum of the variances of the reconciled forecasts subject to the resulting forecasts being coherent and unbiased [@WicEtAl2019].
+
+Linear forecast reconciliation methods can be written [@WicEtAl2019] as
+$$
+  \tilde{\bm{y}}_h = \bm{S}(\bm{S}'\bm{W}^{-1}\bm{S})^{-1}\bm{W}^{-1}\hat{\bm{y}}_h,
+$$
+where $\bm{W}$ is an $n \times n$ positive definite matrix, and $\hat{\bm{y}}_h$ contains the $h$-step forecasts of $\bm{y}_{T+h}$ given data to time $T$. When $\bm{W}_h$ is the covariance matrix of $\hat{\bm{y}}_h$, the resulting forecasts are optimal in the sense that the sum of the variances of the reconciled forecasts is minimized, provided the base forecasts $\hat{\bm{y}}_h$ are unbiased. However, $\bm{W}_h$ is difficult to estimate, and so there have been various suggested approximations to $\bm{W}_h$, leading to different types of reconciliation such as Ordinary Least Squares (OLS), Weighted Least Squares (WLS) and Minimum Trace (MinT).
+
+Ordinary Least Squares (OLS) is the simplest and most commonly used method. In this approach, the estimation of $\bm{W}$ is based on the assumption that all the errors are uncorrelated and have equal variance, and that multi-step forecast variances are proportion to one-step forecast variances. Then, $\bm{W}$ is simply the identity matrix multiplied by a constant factor. The main weakness of this approach is that it does not take account of the different scales of the base time series; the aggregated series will usually have higher variance than the disaggregated series, simply because the values are larger, but OLS treats all series the same. A strength of the approach is that it is simple, and does not involve estimating a covariance matrix.
+
+Weighted Least Squares (WLS) is an extension of OLS where the variance of the errors is assumed to be heteroscedastic, i.e., different for each series. But it assumes that the errors of each series are uncorrelated with each other, and that multi-step forecast variances are proportion to one-step forecast variances. In this approach, $\bm{W}$ is defined as a diagonal matrix with the variance of the errors on the diagonal. The intuition behind WLS is that it assigns higher weight to series with smaller error variance, and thereby takes into account the different scales of the base time series. The main weakness of this approach is that it ignores the relationships between series. A strength of WLS is that it is relatively easy to compute $\bm{W}$ as it is based only on error variances which are readily estimated.
+
+Minimum Trace (MinT) is a further generalization where $\bm{W}$ is defined as the covariance matrix of the one-step base forecast errors. So it takes account of both the scale of each series, and the relationships between the series. But it still assumes that multi-step forecast variances are proportion to one-step forecast variances. The main weakness of this approach is that it is difficult to estimate the full covariance matrix, even of the one-step errors. In practice, we usually need to use a shrinkage estimate where the off-diagonal elements are shrunk towards zero.
+
+We use the implementation of these methods in the fable package in R in the experiment.
+
+Certainly, other approaches can be applied to hierarchical forecasting problems @pennings2017integrated and @villegas2018supply proposed the idea of using a state space model to ensure consistent forecasts. However, when dealing with larger hierarchies, these models encounter difficulties in estimating covariance matrices. In contrast, our approach provides a clear advantage by allowing the incorporation of different forecasting methods for the base forecasts, and even accommodating distinct methods for individual series. The decoupling of time series models from the reconciliation step adds significant flexibility in exploring a wide range of models.
